@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>LIFE LAB — Conway's Game of Life</title>
+<style>
+  :root{
+    --ink:#0a0d12;
+    --ink-2:#0f141b;
+    --panel:#121a23;
+    --panel-2:#16202b;
+    --line:#1f2c39;
+    --line-2:#28394a;
+    --grid:#141d27;
+    --grid-major:#1c2836;
+    --txt:#c9d6e2;
+    --txt-dim:#5f7183;
+    --txt-faint:#3c4a58;
+    --amber:#f2a03d;
+    --amber-dim:#8a5f28;
+    --bone:#e9e4d6;
+    --teal:#63c2b4;
+    --danger:#e06a5a;
+    --mono: ui-monospace,'SF Mono','JetBrains Mono','Cascadia Code',Menlo,Consolas,monospace;
+    --sans: system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:var(--ink);color:var(--txt);font-family:var(--sans)}
+  body{display:flex;flex-direction:column}
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    display:flex;align-items:center;gap:2px;flex-wrap:wrap;
+    padding:8px 12px;background:linear-gradient(180deg,var(--panel-2),var(--panel));
+    border-bottom:1px solid var(--line);z-index:20;
+  }
+  .brand{display:flex;align-items:baseline;gap:10px;margin-right:14px;user-select:none}
+  .brand .mk{
+    font-family:var(--mono);font-weight:700;letter-spacing:.28em;font-size:13px;
+    color:var(--bone);text-transform:uppercase;
+  }
+  .brand .mk b{color:var(--amber)}
+  .brand .sub{font-family:var(--mono);font-size:10px;color:var(--txt-faint);letter-spacing:.18em;text-transform:uppercase}
+
+  .group{display:flex;align-items:center;gap:4px;padding:0 8px;border-left:1px solid var(--line)}
+  .group:first-of-type{border-left:none}
+
+  button.btn{
+    font-family:var(--sans);font-size:12px;color:var(--txt);
+    background:var(--panel-2);border:1px solid var(--line-2);border-radius:5px;
+    padding:7px 10px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;
+    transition:.12s ease;white-space:nowrap;
+  }
+  button.btn:hover{background:#1b2836;border-color:#33475b;color:#fff}
+  button.btn:active{transform:translateY(1px)}
+  button.btn.on{background:var(--amber);border-color:var(--amber);color:#1a1206;font-weight:600}
+  button.btn.primary{background:var(--amber);border-color:var(--amber);color:#1a1206;font-weight:600;min-width:104px;justify-content:center}
+  button.btn.primary:hover{background:#ffb454}
+  button.btn.ghost{background:transparent}
+  button.btn.danger:hover{border-color:var(--danger);color:#ffb0a4}
+  button.btn svg{width:14px;height:14px;display:block}
+  button.icon{padding:7px;min-width:34px;justify-content:center}
+
+  .readout{
+    font-family:var(--mono);font-size:11px;color:var(--txt-dim);
+    display:flex;flex-direction:column;line-height:1.25;padding:0 4px;
+  }
+  .readout b{color:var(--bone);font-weight:600;font-variant-numeric:tabular-nums}
+  .readout .k{color:var(--txt-faint);font-size:9px;letter-spacing:.14em;text-transform:uppercase}
+
+  .slider-wrap{display:flex;flex-direction:column;gap:2px;min-width:130px}
+  .slider-wrap label{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--txt-faint);display:flex;justify-content:space-between}
+  .slider-wrap label span{color:var(--amber)}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;height:4px;border-radius:3px;
+    background:var(--line-2);outline:none;cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:14px;height:14px;border-radius:50%;
+    background:var(--amber);border:2px solid var(--ink);cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--amber);border:2px solid var(--ink);cursor:pointer}
+
+  /* ---------- Layout ---------- */
+  .stage{flex:1;display:flex;min-height:0;position:relative}
+
+  .sidebar{
+    width:288px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--line);
+    display:flex;flex-direction:column;z-index:15;transition:margin-left .2s ease;
+  }
+  .sidebar.collapsed{margin-left:-288px}
+  .side-scroll{overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:18px}
+  .side-scroll::-webkit-scrollbar{width:8px}
+  .side-scroll::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:4px}
+
+  .sec-title{
+    font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--txt-faint);display:flex;align-items:center;gap:8px;margin-bottom:9px;
+  }
+  .sec-title::after{content:"";flex:1;height:1px;background:var(--line)}
+
+  .tool-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .tool{
+    font-family:var(--sans);font-size:12px;color:var(--txt);background:var(--panel-2);
+    border:1px solid var(--line-2);border-radius:6px;padding:9px 8px;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;gap:5px;transition:.12s;
+  }
+  .tool:hover{background:#1b2836;color:#fff}
+  .tool.active{background:var(--amber);border-color:var(--amber);color:#1a1206}
+  .tool svg{width:18px;height:18px}
+  .tool span{font-size:10px;letter-spacing:.04em}
+  .tool small{font-family:var(--mono);font-size:8px;opacity:.6}
+
+  .pat-cat{font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--amber-dim);margin:10px 0 5px}
+  .pat-list{display:flex;flex-direction:column;gap:3px}
+  .pat{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    padding:6px 9px;border-radius:5px;cursor:pointer;font-size:12px;color:var(--txt);
+    border:1px solid transparent;transition:.1s;
+  }
+  .pat:hover{background:var(--panel-2);border-color:var(--line-2)}
+  .pat.active{background:#20303f;border-color:var(--amber-dim);color:#fff}
+  .pat .meta{font-family:var(--mono);font-size:9px;color:var(--txt-faint)}
+
+  textarea{
+    width:100%;height:118px;resize:vertical;background:var(--ink-2);color:var(--teal);
+    border:1px solid var(--line-2);border-radius:6px;padding:9px;font-family:var(--mono);
+    font-size:11px;line-height:1.5;outline:none;
+  }
+  textarea:focus{border-color:var(--amber-dim)}
+  .io-row{display:flex;gap:6px;margin-top:7px}
+  .io-row button{flex:1}
+
+  .field{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .field label{font-family:var(--mono);font-size:10px;color:var(--txt-dim);width:64px;letter-spacing:.08em;text-transform:uppercase}
+  .field input[type=text]{
+    flex:1;background:var(--ink-2);color:var(--txt);border:1px solid var(--line-2);
+    border-radius:5px;padding:7px 9px;font-family:var(--mono);font-size:12px;outline:none;
+  }
+  .field input[type=text]:focus{border-color:var(--amber-dim)}
+
+  .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0;font-size:12px;color:var(--txt-dim)}
+  .switch{position:relative;width:38px;height:20px;flex-shrink:0}
+  .switch input{opacity:0;width:0;height:0}
+  .switch .track{position:absolute;inset:0;background:var(--line-2);border-radius:20px;transition:.15s;cursor:pointer}
+  .switch .track::before{content:"";position:absolute;width:14px;height:14px;left:3px;top:3px;border-radius:50%;background:var(--txt-dim);transition:.15s}
+  .switch input:checked + .track{background:var(--amber-dim)}
+  .switch input:checked + .track::before{transform:translateX(18px);background:var(--amber)}
+
+  /* ---------- Canvas / HUD ---------- */
+  .canvas-wrap{flex:1;position:relative;min-width:0;background:var(--ink);overflow:hidden}
+  #board{display:block;width:100%;height:100%;cursor:crosshair;touch-action:none}
+
+  .hud{
+    position:absolute;left:14px;bottom:14px;z-index:5;pointer-events:none;
+    font-family:var(--mono);font-size:11px;color:var(--txt-dim);
+    background:rgba(10,13,18,.72);backdrop-filter:blur(6px);
+    border:1px solid var(--line);border-radius:8px;padding:9px 12px;
+    display:grid;grid-template-columns:auto auto;gap:2px 16px;line-height:1.5;
+  }
+  .hud .lab{color:var(--txt-faint);letter-spacing:.1em;text-transform:uppercase;font-size:9px}
+  .hud .val{color:var(--bone);text-align:right;font-variant-numeric:tabular-nums}
+  .hud .val.amber{color:var(--amber)}
+
+  .mode-badge{
+    position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:5;pointer-events:none;
+    font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--amber);
+    background:rgba(10,13,18,.72);backdrop-filter:blur(6px);border:1px solid var(--amber-dim);
+    border-radius:20px;padding:5px 14px;opacity:0;transition:opacity .25s;
+  }
+  .mode-badge.show{opacity:1}
+
+  .sidebar-toggle{
+    position:absolute;top:14px;left:14px;z-index:25;
+  }
+  .fit-controls{position:absolute;right:14px;bottom:14px;z-index:5;display:flex;flex-direction:column;gap:6px}
+  .fit-controls .btn{background:rgba(18,26,35,.85);backdrop-filter:blur(6px)}
+
+  /* selection floating bar */
+  .sel-bar{
+    position:absolute;z-index:7;display:none;gap:4px;
+    background:rgba(10,13,18,.9);backdrop-filter:blur(6px);
+    border:1px solid var(--line-2);border-radius:7px;padding:5px;
+  }
+  .sel-bar.show{display:flex}
+  .sel-bar .btn{padding:5px 8px;font-size:11px}
+
+  /* ---------- Help modal ---------- */
+  .modal-bg{position:fixed;inset:0;background:rgba(5,7,10,.8);z-index:40;display:none;align-items:center;justify-content:center;padding:20px}
+  .modal-bg.show{display:flex}
+  .modal{
+    background:var(--panel);border:1px solid var(--line-2);border-radius:12px;
+    max-width:560px;width:100%;max-height:86vh;overflow-y:auto;padding:26px 30px;
+  }
+  .modal h2{font-family:var(--mono);font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--bone);margin-bottom:4px}
+  .modal .lead{color:var(--txt-dim);font-size:13px;margin-bottom:20px;line-height:1.6}
+  .modal h3{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--amber);margin:18px 0 8px}
+  .kb{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:13px}
+  .kb kbd{
+    font-family:var(--mono);font-size:11px;background:var(--ink-2);border:1px solid var(--line-2);
+    border-bottom-width:2px;border-radius:4px;padding:2px 7px;color:var(--bone);justify-self:start;white-space:nowrap;
+  }
+  .kb .d{color:var(--txt-dim)}
+  .modal .close{position:sticky;top:0;float:right;margin:-10px -12px 0 0}
+  .modal p.note{font-size:12px;color:var(--txt-faint);line-height:1.6;margin-top:18px;border-top:1px solid var(--line);padding-top:14px}
+
+  @media (max-width:720px){
+    .sidebar{position:absolute;inset:0 auto 0 0;height:100%}
+    .brand .sub{display:none}
+    .group{padding:0 5px}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ TOP BAR ============ -->
+<div class="topbar">
+  <div class="brand">
+    <div class="mk">LIFE<b>·</b>LAB</div>
+    <div class="sub">Conway B3/S23 · infinite grid</div>
+  </div>
+
+  <div class="group">
+    <button class="btn primary" id="playBtn" title="Space">
+      <svg id="playIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+      <span id="playLabel">Run</span>
+    </button>
+    <button class="btn icon" id="stepBtn" title="Step one generation — S / →">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 6v12l8.5-6zM17 6h2v12h-2z"/></svg>
+    </button>
+  </div>
+
+  <div class="group">
+    <div class="slider-wrap">
+      <label>Speed <span id="speedVal">8 gen/s</span></label>
+      <input type="range" id="speed" min="0" max="100" value="42">
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="readout"><span class="k">Generation</span><b id="genOut">0</b></div>
+    <div class="readout"><span class="k">Population</span><b id="popOut">0</b></div>
+  </div>
+
+  <div class="group" style="margin-left:auto">
+    <button class="btn ghost danger" id="clearBtn" title="Clear all — C">Clear</button>
+    <button class="btn ghost" id="helpBtn" title="Help — ?">?</button>
+  </div>
+</div>
+
+<!-- ============ STAGE ============ -->
+<div class="stage">
+
+  <!-- ---- Sidebar ---- -->
+  <aside class="sidebar" id="sidebar">
+    <div class="side-scroll">
+
+      <div>
+        <div class="sec-title">Tools</div>
+        <div class="tool-grid" id="toolGrid">
+          <button class="tool active" data-tool="draw">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+            <span>Draw</span><small>B</small>
+          </button>
+          <button class="tool" data-tool="erase">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20H7L3 16a2 2 0 0 1 0-3L13 3l8 8-9 9"/><path d="M6 11l8 8"/></svg>
+            <span>Erase</span><small>E</small>
+          </button>
+          <button class="tool" data-tool="pan">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg>
+            <span>Pan</span><small>H · Space</small>
+          </button>
+          <button class="tool" data-tool="select">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="4 3"><rect x="3" y="3" width="18" height="18" rx="1"/></svg>
+            <span>Select</span><small>M</small>
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <div class="sec-title">Pattern Library</div>
+        <p style="font-size:11px;color:var(--txt-faint);line-height:1.5;margin-bottom:4px">
+          Pick one, then click the grid to stamp. <b style="color:var(--txt-dim)">R</b> rotates, <b style="color:var(--txt-dim)">Esc</b> cancels.
+        </p>
+        <div id="patLibrary"></div>
+      </div>
+
+      <div>
+        <div class="sec-title">Rule</div>
+        <div class="field">
+          <label>B / S</label>
+          <input type="text" id="ruleInput" value="B3/S23" spellcheck="false">
+        </div>
+        <p style="font-size:10px;color:var(--txt-faint);line-height:1.5">
+          Birth / Survival neighbour counts. Default is Conway's Life.
+          Try <b style="color:var(--teal);cursor:pointer" class="ex-rule">B36/S23</b> (HighLife),
+          <b style="color:var(--teal);cursor:pointer" class="ex-rule">B2/S</b> (Seeds).
+        </p>
+      </div>
+
+      <div>
+        <div class="sec-title">Display</div>
+        <div class="toggle-row">
+          <span>Age colouring</span>
+          <label class="switch"><input type="checkbox" id="ageToggle" checked><span class="track"></span></label>
+        </div>
+        <div class="toggle-row">
+          <span>Grid lines</span>
+          <label class="switch"><input type="checkbox" id="gridToggle" checked><span class="track"></span></label>
+        </div>
+        <p style="font-size:10px;color:var(--txt-faint);line-height:1.5;margin-top:4px">
+          Age colouring ramps freshly-born cells (amber) to long-lived cells (slate) — active regions glow, still-lifes go quiet.
+        </p>
+      </div>
+
+      <div>
+        <div class="sec-title">Random Soup</div>
+        <div class="field">
+          <label>Density</label>
+          <input type="range" id="densityRange" min="5" max="70" value="30" style="flex:1">
+          <span id="densityVal" style="font-family:var(--mono);font-size:11px;color:var(--amber);width:34px;text-align:right">30%</span>
+        </div>
+        <button class="btn" id="soupBtn" style="width:100%;justify-content:center">Fill viewport with soup</button>
+      </div>
+
+      <div>
+        <div class="sec-title">RLE Import / Export</div>
+        <textarea id="rleBox" spellcheck="false" placeholder="Paste RLE or plaintext here, then Load — or Export the current board."></textarea>
+        <div class="io-row">
+          <button class="btn" id="rleLoad">Load</button>
+          <button class="btn" id="rleExport">Export board</button>
+          <button class="btn ghost" id="rleCopy" title="Copy to clipboard">Copy</button>
+        </div>
+      </div>
+
+    </div>
+  </aside>
+
+  <!-- ---- Canvas ---- -->
+  <div class="canvas-wrap" id="canvasWrap">
+    <canvas id="board"></canvas>
+
+    <button class="btn icon sidebar-toggle" id="sidebarToggle" title="Toggle panel">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+
+    <div class="mode-badge" id="modeBadge"></div>
+
+    <div class="sel-bar" id="selBar">
+      <button class="btn" id="selCopy">Copy RLE</button>
+      <button class="btn" id="selFill">Random</button>
+      <button class="btn danger" id="selClear">Clear</button>
+    </div>
+
+    <div class="hud" id="hud">
+      <span class="lab">Cursor</span><span class="val" id="hudCursor">—</span>
+      <span class="lab">Bounds</span><span class="val" id="hudBounds">empty</span>
+      <span class="lab">Zoom</span><span class="val amber" id="hudZoom">1×</span>
+      <span class="lab">Speed</span><span class="val" id="hudSpeed">idle</span>
+    </div>
+
+    <div class="fit-controls">
+      <button class="btn icon" id="zoomIn" title="Zoom in — +">＋</button>
+      <button class="btn icon" id="zoomOut" title="Zoom out — −">－</button>
+      <button class="btn" id="fitBtn" title="Fit pattern — F">Fit</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ HELP MODAL ============ -->
+<div class="modal-bg" id="helpModal">
+  <div class="modal">
+    <button class="btn ghost close" id="helpClose">✕</button>
+    <h2>Life Lab</h2>
+    <p class="lead">A precise, unbounded Conway's Game of Life instrument. The grid is genuinely infinite — patterns are stored as live cells, so gliders and guns run off into empty space without hitting a wall. Edit cell-by-cell, stamp known patterns, or import any RLE.</p>
+
+    <h3>Controls</h3>
+    <div class="kb">
+      <kbd>Space</kbd><span class="d">Run / pause the simulation</span>
+      <kbd>S</kbd> / <kbd>→</kbd><span class="d">Advance a single generation</span>
+      <kbd>B</kbd><span class="d">Draw tool (paint live cells)</span>
+      <kbd>E</kbd><span class="d">Erase tool</span>
+      <kbd>H</kbd> / hold <kbd>Space</kbd><span class="d">Pan the view (drag)</span>
+      <kbd>M</kbd><span class="d">Select a rectangular region</span>
+      <kbd>R</kbd><span class="d">Rotate the pattern being stamped</span>
+      <kbd>Esc</kbd><span class="d">Cancel stamp / clear selection</span>
+      <kbd>C</kbd><span class="d">Clear the whole board</span>
+      <kbd>F</kbd><span class="d">Zoom to fit the pattern</span>
+      <kbd>+</kbd> / <kbd>−</kbd><span class="d">Zoom in / out</span>
+      <kbd>Scroll</kbd><span class="d">Zoom toward the cursor</span>
+      <kbd>Middle-drag</kbd><span class="d">Pan from any tool</span>
+    </div>
+
+    <h3>Notes for exploration</h3>
+    <p class="note">
+      Coordinates run to roughly ±33 million cells in each direction — far beyond any pattern you'll run by hand. RLE export produces standard <span style="color:var(--teal)">B3/S23</span> files compatible with Golly and LifeWiki, so anything you discover here can be saved, shared, or opened elsewhere. Change the rule string to explore other life-like cellular automata on the same engine.
+    </p>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   LIFE LAB — infinite-grid Game of Life
+   Engine: hash-set of live cells keyed by packed (x,y).
+   Storage: Map<key:number, age:number>
+   ============================================================ */
+
+/* ---- coordinate packing (safe for |coord| < 2^25) ---- */
+const OFF = 1 << 25;          // 33,554,432
+const STRIDE = 1 << 26;       // 67,108,864
+const packK = (x, y) => (x + OFF) * STRIDE + (y + OFF);
+const unX = k => Math.floor(k / STRIDE) - OFF;
+const unY = k => (k % STRIDE) - OFF;
+
+/* ---- global state ---- */
+let live = new Map();         // key -> age
+let generation = 0;
+let born = new Set([3]);      // B3
+let survive = new Set([2,3]); // S23
+let running = false;
+let tool = 'draw';
+let ageColor = true;
+let showGrid = true;
+
+let stampPattern = null;      // array of [dx,dy], normalized to origin
+let stampRot = 0;
+
+let selection = null;         // {x0,y0,x1,y1} in cell coords (inclusive)
+let selecting = false;
+
+/* camera: world coord at screen top-left + pixels-per-cell */
+let cam = { x: -20, y: -20, scale: 14 };
+const MIN_SCALE = 0.08, MAX_SCALE = 64;
+
+/* undo stack (snapshots of live map as array) */
+const undoStack = [];
+const UNDO_MAX = 40;
+
+/* speed mapping */
+let speedRaw = 42;
+
+/* ---- DOM ---- */
+const canvas = document.getElementById('board');
+const ctx = canvas.getContext('2d', { alpha: false });
+const wrap = document.getElementById('canvasWrap');
+let DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+let cw = 0, ch = 0;
+
+/* =========================================================
+   ENGINE
+   ========================================================= */
+function snapshot(){
+  undoStack.push({ cells: Array.from(live.entries()), gen: generation });
+  if (undoStack.length > UNDO_MAX) undoStack.shift();
+}
+function undo(){
+  const s = undoStack.pop();
+  if (!s) return;
+  live = new Map(s.cells);
+  generation = s.gen;
+  updateStats();
+}
+
+function step(){
+  const counts = new Map();
+  // count neighbours contributed by every live cell
+  for (const k of live.keys()){
+    const x = unX(k), y = unY(k);
+    for (let dx = -1; dx <= 1; dx++){
+      for (let dy = -1; dy <= 1; dy++){
+        if (dx === 0 && dy === 0) continue;
+        const nk = packK(x + dx, y + dy);
+        counts.set(nk, (counts.get(nk) || 0) + 1);
+      }
+    }
+  }
+  const next = new Map();
+  for (const [k, c] of counts){
+    const wasAlive = live.has(k);
+    if (wasAlive ? survive.has(c) : born.has(c)){
+      next.set(k, wasAlive ? live.get(k) + 1 : 1);
+    }
+  }
+  live = next;
+  generation++;
+}
+
+/* =========================================================
+   RENDER
+   ========================================================= */
+function resize(){
+  DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+  cw = wrap.clientWidth; ch = wrap.clientHeight;
+  canvas.width = Math.round(cw * DPR);
+  canvas.height = Math.round(ch * DPR);
+  canvas.style.width = cw + 'px';
+  canvas.style.height = ch + 'px';
+}
+
+/* precompute 21-step age palette (amber -> slate) */
+const AGE_STEPS = 22;
+const agePalette = (() => {
+  const a = [255,180,84], b = [116,150,170];
+  const out = [];
+  for (let i = 0; i < AGE_STEPS; i++){
+    const t = i / (AGE_STEPS - 1);
+    out.push(`rgb(${Math.round(a[0]+(b[0]-a[0])*t)},${Math.round(a[1]+(b[1]-a[1])*t)},${Math.round(a[2]+(b[2]-a[2])*t)})`);
+  }
+  return out;
+})();
+
+function draw(){
+  const s = cam.scale * DPR;
+  ctx.fillStyle = '#0a0d12';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // visible cell range
+  const cx0 = Math.floor(cam.x), cy0 = Math.floor(cam.y);
+  const cx1 = Math.ceil(cam.x + cw / cam.scale);
+  const cy1 = Math.ceil(cam.y + ch / cam.scale);
+
+  // grid lines
+  if (showGrid && cam.scale >= 4){
+    ctx.lineWidth = 1;
+    for (let gx = cx0; gx <= cx1; gx++){
+      const px = Math.round((gx - cam.x) * s) + 0.5;
+      ctx.strokeStyle = (gx % 10 === 0) ? '#1c2836' : '#141d27';
+      ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, canvas.height); ctx.stroke();
+    }
+    for (let gy = cy0; gy <= cy1; gy++){
+      const py = Math.round((gy - cam.y) * s) + 0.5;
+      ctx.strokeStyle = (gy % 10 === 0) ? '#1c2836' : '#141d27';
+      ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(canvas.width, py); ctx.stroke();
+    }
+  }
+
+  // origin crosshair
+  if (cam.scale >= 1){
+    const ox = Math.round((0 - cam.x) * s), oy = Math.round((0 - cam.y) * s);
+    if (ox >= -20 && ox <= canvas.width+20 && oy >= -20 && oy <= canvas.height+20){
+      ctx.strokeStyle = 'rgba(242,160,61,0.28)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(ox-8,oy); ctx.lineTo(ox+8,oy); ctx.moveTo(ox,oy-8); ctx.lineTo(ox,oy+8); ctx.stroke();
+    }
+  }
+
+  // cells
+  const gap = cam.scale >= 5 ? 1 * DPR : 0;
+  const size = Math.max(1, s - gap);
+
+  if (ageColor){
+    // bucket cells by age palette index to minimise fillStyle churn
+    const buckets = Array.from({length: AGE_STEPS}, () => []);
+    for (const [k, age] of live){
+      const x = unX(k), y = unY(k);
+      if (x < cx0 || x > cx1 || y < cy0 || y > cy1) continue;
+      const idx = age >= AGE_STEPS ? AGE_STEPS - 1 : age - 1;
+      buckets[idx < 0 ? 0 : idx].push(x, y);
+    }
+    for (let i = 0; i < AGE_STEPS; i++){
+      const arr = buckets[i];
+      if (!arr.length) continue;
+      ctx.fillStyle = agePalette[i];
+      for (let j = 0; j < arr.length; j += 2){
+        const px = Math.round((arr[j] - cam.x) * s);
+        const py = Math.round((arr[j+1] - cam.y) * s);
+        ctx.fillRect(px, py, size, size);
+      }
+    }
+  } else {
+    ctx.fillStyle = '#e9e4d6';
+    for (const k of live.keys()){
+      const x = unX(k), y = unY(k);
+      if (x < cx0 || x > cx1 || y < cy0 || y > cy1) continue;
+      const px = Math.round((x - cam.x) * s);
+      const py = Math.round((y - cam.y) * s);
+      ctx.fillRect(px, py, size, size);
+    }
+  }
+
+  // stamp preview
+  if (stampPattern && lastCursor){
+    ctx.fillStyle = 'rgba(99,194,180,0.45)';
+    const cells = rotatedStamp();
+    for (const [dx, dy] of cells){
+      const x = lastCursor.cx + dx, y = lastCursor.cy + dy;
+      const px = Math.round((x - cam.x) * s);
+      const py = Math.round((y - cam.y) * s);
+      ctx.fillRect(px, py, size, size);
+    }
+  }
+
+  // selection rectangle
+  if (selection){
+    const {x0,y0,x1,y1} = normSel(selection);
+    const px = (x0 - cam.x) * s;
+    const py = (y0 - cam.y) * s;
+    const pw = (x1 - x0 + 1) * s;
+    const ph = (y1 - y0 + 1) * s;
+    ctx.fillStyle = 'rgba(242,160,61,0.10)';
+    ctx.fillRect(px, py, pw, ph);
+    ctx.strokeStyle = '#f2a03d'; ctx.lineWidth = 1.5 * DPR;
+    ctx.setLineDash([6*DPR, 4*DPR]);
+    ctx.strokeRect(px, py, pw, ph);
+    ctx.setLineDash([]);
+    positionSelBar(x0, y0, x1, y1);
+  }
+}
+
+/* =========================================================
+   PATTERN LIBRARY  (parsed from RLE lazily)
+   ========================================================= */
+const LIBRARY = {
+  'Spaceships': {
+    'Glider'          : { rle:'bo$2bo$3o!', meta:'c/4 diag' },
+    'Lightweight ship': { rle:'bo2bo$o4b$o3bo$4o!', meta:'c/2' },
+  },
+  'Oscillators': {
+    'Blinker'         : { rle:'3o!', meta:'p2' },
+    'Toad'            : { rle:'b3o$3o!', meta:'p2' },
+    'Beacon'          : { rle:'2o$2o$2b2o$2b2o!', meta:'p2' },
+    'Pulsar'          : { rle:'2b3o3b3o$$o4bobo4bo$o4bobo4bo$o4bobo4bo$2b3o3b3o$$2b3o3b3o$o4bobo4bo$o4bobo4bo$o4bobo4bo$$2b3o3b3o!', meta:'p3' },
+    'Pentadecathlon'  : { rle:'2bo4bo2b$2ob4ob2o$2bo4bo2b!', meta:'p15' },
+  },
+  'Guns': {
+    'Gosper glider gun': { rle:'24bo$22bobo$12b2o6b2o12b2o$11bo3bo4b2o12b2o$2o8bo5bo3b2o$2o8bo3bob2o4bobo$10bo5bo7bo$11bo3bo$12b2o!', meta:'p30' },
+  },
+  'Methuselahs': {
+    'R-pentomino'     : { rle:'b2o$2o$bo!', meta:'1103 gen' },
+    'Acorn'           : { rle:'bo5b$3bo3b$2o2b3o!', meta:'5206 gen' },
+    'Diehard'         : { rle:'6bob$2o6b$bo3b3o!', meta:'→ ∅ @130' },
+  },
+  'Still lifes': {
+    'Block'  : { rle:'2o$2o!', meta:'' },
+    'Beehive': { rle:'b2o$o2bo$b2o!', meta:'' },
+    'Loaf'   : { rle:'b2o$o2bo$bobo$2bo!', meta:'' },
+    'Boat'   : { rle:'2o$obo$bo!', meta:'' },
+    'Tub'    : { rle:'bo$obo$bo!', meta:'' },
+  },
+};
+
+/* parse RLE body -> array of [x,y] (origin top-left) */
+function parseRLE(text){
+  const cells = [];
+  let x = 0, y = 0;
+  // strip comment (#) lines and header (x = ...) line, capture rule
+  let ruleFound = null;
+  const lines = text.split(/\r?\n/);
+  let body = '';
+  for (let line of lines){
+    const t = line.trim();
+    if (!t) continue;
+    if (t[0] === '#') continue;
+    if (/^x\s*=/.test(t)){
+      const m = t.match(/rule\s*=\s*([^,\s]+)/i);
+      if (m) ruleFound = m[1];
+      continue;
+    }
+    body += t;
+  }
+  if (!body){ // maybe plaintext
+    return { cells: parsePlaintext(text), rule: null };
+  }
+  let num = '';
+  for (const ch of body){
+    if (ch >= '0' && ch <= '9'){ num += ch; continue; }
+    const run = num ? parseInt(num, 10) : 1; num = '';
+    if (ch === 'b' || ch === '.'){ x += run; }
+    else if (ch === 'o' || (ch >= 'A' && ch <= 'Z') || ch === '*'){
+      for (let i = 0; i < run; i++) cells.push([x++, y]);
+    } else if (ch === '$'){ y += run; x = 0; }
+    else if (ch === '!'){ break; }
+    // ignore whitespace / others
+  }
+  return { cells, rule: ruleFound };
+}
+
+function parsePlaintext(text){
+  const cells = [];
+  const lines = text.split(/\r?\n/);
+  let y = 0;
+  for (const line of lines){
+    if (line.trim()[0] === '#' || line.trim()[0] === '!') continue;
+    for (let x = 0; x < line.length; x++){
+      const c = line[x];
+      if (c === 'O' || c === 'o' || c === '*' || c === 'X') cells.push([x, y]);
+    }
+    y++;
+  }
+  return cells;
+}
+
+/* build RLE from a list of [x,y] cells */
+function toRLE(cells, ruleStr){
+  if (!cells.length) return `x = 0, y = 0, rule = ${ruleStr}\n!`;
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  for (const [x,y] of cells){ if(x<minX)minX=x; if(y<minY)minY=y; if(x>maxX)maxX=x; if(y>maxY)maxY=y; }
+  const w = maxX-minX+1, h = maxY-minY+1;
+  const set = new Set(cells.map(([x,y]) => (x-minX)+','+(y-minY)));
+  // emit tokens
+  const tokens = []; // {n, s}
+  const push = (n, s) => {
+    if (n <= 0) return;
+    const last = tokens[tokens.length-1];
+    if (last && last.s === s) last.n += n; else tokens.push({n, s});
+  };
+  for (let ry = 0; ry < h; ry++){
+    let rowRun = 0;
+    // compute row cells run-length
+    const rowToks = [];
+    let cur = null, curN = 0;
+    for (let rx = 0; rx < w; rx++){
+      const alive = set.has(rx+','+ry) ? 'o' : 'b';
+      if (alive === cur) curN++; else { if(cur) rowToks.push({n:curN,s:cur}); cur=alive; curN=1; }
+    }
+    // trim trailing dead cells
+    if (cur === 'o') rowToks.push({n:curN,s:cur});
+    // append this row's tokens
+    for (const t of rowToks) push(t.n, t.s);
+    if (ry < h-1) push(1, '$');
+  }
+  // stringify with $ collapsing already handled by push()
+  let out = '';
+  for (const t of tokens){
+    out += (t.n > 1 ? t.n : '') + t.s;
+  }
+  out += '!';
+  // wrap at 70
+  let wrapped = '';
+  for (let i = 0; i < out.length; i += 70) wrapped += out.slice(i, i+70) + '\n';
+  return `x = ${w}, y = ${h}, rule = ${ruleStr}\n${wrapped.trimEnd()}`;
+}
+
+/* normalize a parsed pattern to offset list around its own top-left */
+function normalizeCells(cells){
+  let minX=Infinity,minY=Infinity;
+  for (const [x,y] of cells){ if(x<minX)minX=x; if(y<minY)minY=y; }
+  return cells.map(([x,y]) => [x-minX, y-minY]);
+}
+function centerStamp(cells){
+  let maxX=0,maxY=0;
+  for (const [x,y] of cells){ if(x>maxX)maxX=x; if(y>maxY)maxY=y; }
+  const cxo = Math.floor(maxX/2), cyo = Math.floor(maxY/2);
+  return cells.map(([x,y]) => [x-cxo, y-cyo]);
+}
+function rotatedStamp(){
+  let cells = stampPattern;
+  for (let r = 0; r < stampRot; r++){
+    cells = cells.map(([x,y]) => [-y, x]);
+  }
+  return cells;
+}
+
+/* =========================================================
+   INTERACTION
+   ========================================================= */
+let lastCursor = null;      // {cx, cy}
+let dragging = false;
+let panning = false;
+let panStart = null;
+let spaceHeld = false;
+let paintValue = 1;         // 1 = alive, 0 = dead
+let paintedThisStroke = new Set();
+
+function screenToCell(clientX, clientY){
+  const r = canvas.getBoundingClientRect();
+  const px = clientX - r.left, py = clientY - r.top;
+  return {
+    cx: Math.floor(cam.x + px / cam.scale),
+    cy: Math.floor(cam.y + py / cam.scale),
+    px, py
+  };
+}
+
+function setCell(x, y, alive){
+  const k = packK(x, y);
+  if (alive){ if (!live.has(k)) live.set(k, 1); }
+  else live.delete(k);
+}
+
+canvas.addEventListener('pointerdown', e => {
+  canvas.setPointerCapture(e.pointerId);
+  const c = screenToCell(e.clientX, e.clientY);
+  lastCursor = c;
+
+  const usePan = e.button === 1 || tool === 'pan' || spaceHeld;
+  if (usePan){
+    panning = true;
+    panStart = { x: e.clientX, y: e.clientY, camx: cam.x, camy: cam.y };
+    canvas.style.cursor = 'grabbing';
+    return;
+  }
+
+  if (stampPattern){
+    snapshot();
+    for (const [dx, dy] of rotatedStamp()) setCell(c.cx + dx, c.cy + dy, true);
+    updateStats();
+    return;
+  }
+
+  if (tool === 'select'){
+    selecting = true;
+    selection = { x0: c.cx, y0: c.cy, x1: c.cx, y1: c.cy };
+    hideSelBar();
+    return;
+  }
+
+  // draw / erase
+  snapshot();
+  dragging = true;
+  paintedThisStroke = new Set();
+  paintValue = (tool === 'erase') ? 0 : 1;
+  applyPaint(c.cx, c.cy);
+});
+
+function applyPaint(x, y){
+  const id = x+','+y;
+  if (paintedThisStroke.has(id)) return;
+  paintedThisStroke.add(id);
+  setCell(x, y, paintValue === 1);
+  updateStats();
+}
+
+canvas.addEventListener('pointermove', e => {
+  const c = screenToCell(e.clientX, e.clientY);
+  lastCursor = c;
+  document.getElementById('hudCursor').textContent = `${c.cx}, ${c.cy}`;
+
+  if (panning && panStart){
+    const dx = (e.clientX - panStart.x) / cam.scale;
+    const dy = (e.clientY - panStart.y) / cam.scale;
+    cam.x = panStart.camx - dx;
+    cam.y = panStart.camy - dy;
+    return;
+  }
+  if (selecting && selection){
+    selection.x1 = c.cx; selection.y1 = c.cy;
+    return;
+  }
+  if (dragging){
+    // interpolate to avoid gaps on fast drags
+    applyPaint(c.cx, c.cy);
+  }
+});
+
+canvas.addEventListener('pointerup', e => {
+  if (panning){ panning = false; canvas.style.cursor = ''; updateCursorStyle(); }
+  if (selecting){
+    selecting = false;
+    const s = normSel(selection);
+    if (s.x0 === s.x1 && s.y0 === s.y1){ selection = null; hideSelBar(); }
+    else showSelBar();
+  }
+  dragging = false;
+});
+canvas.addEventListener('pointercancel', () => { panning=false; dragging=false; selecting=false; });
+
+/* wheel zoom toward cursor */
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = canvas.getBoundingClientRect();
+  const px = e.clientX - r.left, py = e.clientY - r.top;
+  const worldX = cam.x + px / cam.scale;
+  const worldY = cam.y + py / cam.scale;
+  const factor = e.deltaY < 0 ? 1.15 : 1/1.15;
+  cam.scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, cam.scale * factor));
+  cam.x = worldX - px / cam.scale;
+  cam.y = worldY - py / cam.scale;
+  updateHud();
+}, { passive: false });
+
+/* =========================================================
+   SELECTION helpers
+   ========================================================= */
+function normSel(s){
+  return {
+    x0: Math.min(s.x0, s.x1), y0: Math.min(s.y0, s.y1),
+    x1: Math.max(s.x0, s.x1), y1: Math.max(s.y0, s.y1)
+  };
+}
+const selBar = document.getElementById('selBar');
+function showSelBar(){ selBar.classList.add('show'); }
+function hideSelBar(){ selBar.classList.remove('show'); }
+function positionSelBar(x0,y0,x1,y1){
+  if (!selBar.classList.contains('show')) return;
+  const sx = (x0 - cam.x) * cam.scale;
+  const sy = (y0 - cam.y) * cam.scale;
+  selBar.style.left = Math.max(6, sx) + 'px';
+  selBar.style.top  = Math.max(6, sy - 42) + 'px';
+}
+function selCells(){
+  if (!selection) return [];
+  const s = normSel(selection);
+  const out = [];
+  for (const k of live.keys()){
+    const x = unX(k), y = unY(k);
+    if (x>=s.x0 && x<=s.x1 && y>=s.y0 && y<=s.y1) out.push([x,y]);
+  }
+  return out;
+}
+document.getElementById('selClear').onclick = () => {
+  if (!selection) return; snapshot();
+  const s = normSel(selection);
+  for (const k of Array.from(live.keys())){
+    const x = unX(k), y = unY(k);
+    if (x>=s.x0 && x<=s.x1 && y>=s.y0 && y<=s.y1) live.delete(k);
+  }
+  updateStats();
+};
+document.getElementById('selFill').onclick = () => {
+  if (!selection) return; snapshot();
+  const s = normSel(selection);
+  const d = parseInt(document.getElementById('densityRange').value,10)/100;
+  for (let x=s.x0; x<=s.x1; x++) for (let y=s.y0; y<=s.y1; y++){
+    if (Math.random() < d) live.set(packK(x,y), 1); else live.delete(packK(x,y));
+  }
+  updateStats();
+};
+document.getElementById('selCopy').onclick = () => {
+  const cells = selCells();
+  const rle = toRLE(cells, ruleString());
+  document.getElementById('rleBox').value = rle;
+  copyText(rle);
+  flashBadge('Selection copied to RLE');
+};
+
+/* =========================================================
+   RULE
+   ========================================================= */
+function ruleString(){
+  return 'B' + [...born].sort((a,b)=>a-b).join('') + '/S' + [...survive].sort((a,b)=>a-b).join('');
+}
+function parseRule(str){
+  const m = str.trim().toUpperCase().match(/^B([0-8]*)\/S([0-8]*)$/);
+  if (!m) return false;
+  born = new Set([...m[1]].map(Number));
+  survive = new Set([...m[2]].map(Number));
+  return true;
+}
+const ruleInput = document.getElementById('ruleInput');
+ruleInput.addEventListener('change', () => {
+  if (parseRule(ruleInput.value)) { ruleInput.style.color=''; flashBadge('Rule → '+ruleString()); }
+  else { ruleInput.style.color = 'var(--danger)'; }
+});
+document.querySelectorAll('.ex-rule').forEach(el => el.onclick = () => {
+  ruleInput.value = el.textContent; parseRule(el.textContent); flashBadge('Rule → '+el.textContent);
+});
+
+/* =========================================================
+   STATS / HUD
+   ========================================================= */
+function updateStats(){
+  document.getElementById('genOut').textContent = generation.toLocaleString();
+  document.getElementById('popOut').textContent = live.size.toLocaleString();
+  updateHud();
+}
+function updateHud(){
+  document.getElementById('hudZoom').textContent =
+    cam.scale >= 1 ? Math.round(cam.scale)+'×' : cam.scale.toFixed(2)+'×';
+  if (live.size === 0){ document.getElementById('hudBounds').textContent = 'empty'; return; }
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  for (const k of live.keys()){
+    const x=unX(k), y=unY(k);
+    if(x<minX)minX=x; if(y<minY)minY=y; if(x>maxX)maxX=x; if(y>maxY)maxY=y;
+  }
+  document.getElementById('hudBounds').textContent = `${maxX-minX+1} × ${maxY-minY+1}`;
+}
+
+/* =========================================================
+   SIMULATION LOOP  (speed -> gens-per-frame + throttle)
+   ========================================================= */
+let acc = 0, lastT = 0;
+function speedConfig(){
+  // returns {interval(ms) , gensPerTick}
+  const v = speedRaw; // 0..100
+  if (v <= 55){
+    // slow: 1 gen, interval 600ms .. 16ms
+    const t = v / 55;
+    const interval = 600 * Math.pow(16/600, t);
+    return { interval, gens: 1, gps: 1000/interval };
+  } else {
+    // fast: every frame, gens 1..48
+    const t = (v - 55) / 45;
+    const gens = Math.round(1 + t * 47);
+    return { interval: 0, gens, gps: gens * 60 };
+  }
+}
+function loop(ts){
+  requestAnimationFrame(loop);
+  if (running){
+    const cfg = speedConfig();
+    if (cfg.interval === 0){
+      for (let i=0;i<cfg.gens;i++) step();
+      updateStats();
+    } else {
+      acc += ts - lastT;
+      if (acc >= cfg.interval){
+        acc = 0;
+        step(); updateStats();
+      }
+    }
+  }
+  lastT = ts;
+  draw();
+}
+
+/* =========================================================
+   PLAY / STEP / CLEAR
+   ========================================================= */
+const playBtn = document.getElementById('playBtn');
+const playIcon = document.getElementById('playIcon');
+const playLabel = document.getElementById('playLabel');
+function setRunning(on){
+  running = on;
+  playBtn.classList.toggle('on', on);
+  playIcon.innerHTML = on
+    ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>'
+    : '<path d="M8 5v14l11-7z"/>';
+  playLabel.textContent = on ? 'Pause' : 'Run';
+  document.getElementById('hudSpeed').textContent = on ? Math.round(speedConfig().gps)+' gen/s' : 'idle';
+  if (on){ snapshotRunOnce(); }
+}
+let runSnapDone = false;
+function snapshotRunOnce(){ if(!runSnapDone){ snapshot(); runSnapDone = true; } }
+playBtn.onclick = () => { runSnapDone = false; setRunning(!running); };
+document.getElementById('stepBtn').onclick = () => { if(running) setRunning(false); snapshot(); step(); updateStats(); };
+document.getElementById('clearBtn').onclick = () => {
+  snapshot(); live = new Map(); generation = 0; selection=null; hideSelBar(); updateStats();
+};
+
+/* speed slider */
+const speedEl = document.getElementById('speed');
+speedEl.addEventListener('input', () => {
+  speedRaw = parseInt(speedEl.value,10);
+  const cfg = speedConfig();
+  document.getElementById('speedVal').textContent =
+    cfg.gps >= 1 ? Math.round(cfg.gps)+' gen/s' : cfg.gps.toFixed(1)+' gen/s';
+  if (running) document.getElementById('hudSpeed').textContent = Math.round(cfg.gps)+' gen/s';
+});
+speedEl.dispatchEvent(new Event('input'));
+
+/* =========================================================
+   TOOLS UI
+   ========================================================= */
+document.querySelectorAll('.tool').forEach(t => {
+  t.onclick = () => selectTool(t.dataset.tool);
+});
+function selectTool(name){
+  tool = name;
+  stampPattern = null;
+  document.querySelectorAll('.tool').forEach(x => x.classList.toggle('active', x.dataset.tool===name));
+  document.querySelectorAll('.pat').forEach(p => p.classList.remove('active'));
+  if (name !== 'select'){ selection = null; hideSelBar(); }
+  updateCursorStyle();
+  flashBadge(name.charAt(0).toUpperCase()+name.slice(1)+' tool');
+}
+function updateCursorStyle(){
+  canvas.style.cursor = tool==='pan' ? 'grab' : (tool==='select' ? 'crosshair' : 'crosshair');
+}
+
+/* =========================================================
+   PATTERN LIBRARY UI
+   ========================================================= */
+const patLib = document.getElementById('patLibrary');
+for (const [cat, items] of Object.entries(LIBRARY)){
+  const h = document.createElement('div');
+  h.className = 'pat-cat'; h.textContent = cat;
+  patLib.appendChild(h);
+  const list = document.createElement('div'); list.className='pat-list';
+  for (const [name, def] of Object.entries(items)){
+    const row = document.createElement('div');
+    row.className = 'pat';
+    row.innerHTML = `<span>${name}</span><span class="meta">${def.meta||''}</span>`;
+    row.onclick = () => {
+      document.querySelectorAll('.pat').forEach(p=>p.classList.remove('active'));
+      row.classList.add('active');
+      const parsed = parseRLE(def.rle);
+      stampPattern = centerStamp(normalizeCells(parsed.cells));
+      stampRot = 0;
+      tool = 'stamp';
+      document.querySelectorAll('.tool').forEach(x=>x.classList.remove('active'));
+      flashBadge(`${name} — click to stamp, R to rotate`);
+    };
+    list.appendChild(row);
+  }
+  patLib.appendChild(list);
+}
+
+/* =========================================================
+   RANDOM SOUP
+   ========================================================= */
+const densityRange = document.getElementById('densityRange');
+densityRange.addEventListener('input', () => {
+  document.getElementById('densityVal').textContent = densityRange.value+'%';
+});
+document.getElementById('soupBtn').onclick = () => {
+  snapshot();
+  const d = parseInt(densityRange.value,10)/100;
+  const x0 = Math.floor(cam.x), y0 = Math.floor(cam.y);
+  const x1 = Math.ceil(cam.x + cw/cam.scale), y1 = Math.ceil(cam.y + ch/cam.scale);
+  for (let x=x0;x<x1;x++) for (let y=y0;y<y1;y++){
+    if (Math.random() < d) live.set(packK(x,y), 1);
+  }
+  updateStats();
+  flashBadge('Random soup dropped');
+};
+
+/* =========================================================
+   RLE IMPORT / EXPORT
+   ========================================================= */
+document.getElementById('rleLoad').onclick = () => {
+  const txt = document.getElementById('rleBox').value;
+  if (!txt.trim()){ flashBadge('Nothing to load'); return; }
+  const parsed = parseRLE(txt);
+  if (!parsed.cells.length){ flashBadge('No cells found'); return; }
+  snapshot();
+  live = new Map(); generation = 0;
+  const norm = normalizeCells(parsed.cells);
+  // place centered on current view
+  const vx = Math.floor(cam.x + cw/cam.scale/2);
+  const vy = Math.floor(cam.y + ch/cam.scale/2);
+  let maxX=0,maxY=0; for(const [x,y] of norm){ if(x>maxX)maxX=x; if(y>maxY)maxY=y; }
+  const ox = vx - Math.floor(maxX/2), oy = vy - Math.floor(maxY/2);
+  for (const [x,y] of norm) live.set(packK(x+ox, y+oy), 1);
+  if (parsed.rule && parseRule(parsed.rule)) ruleInput.value = ruleString();
+  updateStats();
+  fitView();
+  flashBadge(`Loaded ${norm.length} cells`);
+};
+document.getElementById('rleExport').onclick = () => {
+  const cells = Array.from(live.keys()).map(k => [unX(k), unY(k)]);
+  document.getElementById('rleBox').value = toRLE(cells, ruleString());
+  flashBadge('Board exported to RLE');
+};
+document.getElementById('rleCopy').onclick = () => {
+  copyText(document.getElementById('rleBox').value);
+  flashBadge('Copied to clipboard');
+};
+function copyText(t){
+  if (navigator.clipboard) navigator.clipboard.writeText(t).catch(()=>{});
+}
+
+/* =========================================================
+   VIEW: fit / zoom
+   ========================================================= */
+function fitView(){
+  if (live.size === 0){ cam = {x:-20,y:-20,scale:14}; updateHud(); return; }
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  for (const k of live.keys()){
+    const x=unX(k), y=unY(k);
+    if(x<minX)minX=x; if(y<minY)minY=y; if(x>maxX)maxX=x; if(y>maxY)maxY=y;
+  }
+  const w = maxX-minX+1, h = maxY-minY+1;
+  const pad = 0.15;
+  const scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE,
+    Math.min(cw / (w*(1+2*pad)), ch / (h*(1+2*pad)))));
+  cam.scale = scale;
+  cam.x = (minX+maxX)/2 - cw/(2*scale);
+  cam.y = (minY+maxY)/2 - ch/(2*scale);
+  updateHud();
+}
+document.getElementById('fitBtn').onclick = fitView;
+function zoomBy(f){
+  const worldX = cam.x + (cw/2)/cam.scale, worldY = cam.y + (ch/2)/cam.scale;
+  cam.scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, cam.scale*f));
+  cam.x = worldX - (cw/2)/cam.scale; cam.y = worldY - (ch/2)/cam.scale;
+  updateHud();
+}
+document.getElementById('zoomIn').onclick = () => zoomBy(1.3);
+document.getElementById('zoomOut').onclick = () => zoomBy(1/1.3);
+
+/* =========================================================
+   TOGGLES / SIDEBAR / HELP
+   ========================================================= */
+document.getElementById('ageToggle').onchange = e => ageColor = e.target.checked;
+document.getElementById('gridToggle').onchange = e => showGrid = e.target.checked;
+
+const sidebar = document.getElementById('sidebar');
+document.getElementById('sidebarToggle').onclick = () => sidebar.classList.toggle('collapsed');
+
+const helpModal = document.getElementById('helpModal');
+document.getElementById('helpBtn').onclick = () => helpModal.classList.add('show');
+document.getElementById('helpClose').onclick = () => helpModal.classList.remove('show');
+helpModal.onclick = e => { if (e.target === helpModal) helpModal.classList.remove('show'); };
+
+/* mode badge */
+const modeBadge = document.getElementById('modeBadge');
+let badgeTimer = null;
+function flashBadge(txt){
+  modeBadge.textContent = txt;
+  modeBadge.classList.add('show');
+  clearTimeout(badgeTimer);
+  badgeTimer = setTimeout(()=>modeBadge.classList.remove('show'), 1400);
+}
+
+/* =========================================================
+   KEYBOARD
+   ========================================================= */
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+  switch(e.key){
+    case ' ': e.preventDefault();
+      if (!spaceHeld && !e.repeat){
+        // tap = play/pause handled on keyup unless dragging; hold = pan
+      }
+      spaceHeld = true; canvas.style.cursor='grab'; break;
+    case 's': case 'S': case 'ArrowRight':
+      e.preventDefault(); if(running) setRunning(false); snapshot(); step(); updateStats(); break;
+    case 'b': case 'B': selectTool('draw'); break;
+    case 'e': case 'E': selectTool('erase'); break;
+    case 'h': case 'H': selectTool('pan'); break;
+    case 'm': case 'M': selectTool('select'); break;
+    case 'c': case 'C':
+      snapshot(); live=new Map(); generation=0; selection=null; hideSelBar(); updateStats(); break;
+    case 'f': case 'F': fitView(); break;
+    case 'r': case 'R':
+      if (stampPattern){ stampRot = (stampRot+1)%4; flashBadge('Rotated'); } break;
+    case '+': case '=': zoomBy(1.3); break;
+    case '-': case '_': zoomBy(1/1.3); break;
+    case 'Escape': stampPattern=null; selection=null; hideSelBar();
+      document.querySelectorAll('.pat').forEach(p=>p.classList.remove('active'));
+      if(tool==='stamp') selectTool('draw'); break;
+    case 'z': case 'Z': if (e.ctrlKey||e.metaKey){ e.preventDefault(); undo(); } break;
+    case '?': helpModal.classList.toggle('show'); break;
+    case 'ArrowLeft': cam.x -= 3; break;
+    case 'ArrowUp': cam.y -= 3; break;
+    case 'ArrowDown': cam.y += 3; break;
+  }
+});
+let spaceTapStart = 0;
+window.addEventListener('keydown', e => { if(e.key===' ' && !e.repeat) spaceTapStart = performance.now(); });
+window.addEventListener('keyup', e => {
+  if (e.key === ' '){
+    spaceHeld = false; updateCursorStyle();
+    // treat a quick tap (not a drag-pan) as play/pause
+    if (performance.now() - spaceTapStart < 250 && !panning){
+      runSnapDone = false; setRunning(!running);
+    }
+  }
+});
+
+/* =========================================================
+   INIT
+   ========================================================= */
+function seedGlider(){
+  // a couple of gliders + a blinker to greet the user
+  const g = parseRLE('bo$2bo$3o!').cells;
+  for (const [x,y] of g) live.set(packK(x+2, y+2), 1);
+  for (const [x,y] of parseRLE('24bo$22bobo$12b2o6b2o12b2o$11bo3bo4b2o12b2o$2o8bo5bo3b2o$2o8bo3bob2o4bobo$10bo5bo7bo$11bo3bo$12b2o!').cells)
+    live.set(packK(x+10, y+16), 1);
+}
+window.addEventListener('resize', () => { resize(); updateHud(); });
+new ResizeObserver(() => { resize(); updateHud(); }).observe(wrap);
+resize();
+parseRule('B3/S23');
+seedGlider();
+fitView();
+updateStats();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
